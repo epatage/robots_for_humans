@@ -1,23 +1,24 @@
 import json
+from datetime import datetime, timedelta
 
 from django.core.exceptions import ValidationError
+from django.db.models import Count
 from django.db.utils import IntegrityError
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from openpyxl import Workbook
-
-from robots.models import Robot, RobotModel
-from django.http import HttpResponse
-from datetime import datetime, timedelta
-from django.db.models import Count
 from openpyxl.styles.alignment import Alignment
 from openpyxl.styles.borders import Border, Side
+
+from orders.models import Customer, Order
+from robots.models import Robot, RobotModel
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RobotView(View):
+    """Создание и получение всех роботов."""
 
     def get(self, request):
 
@@ -41,13 +42,14 @@ class RobotView(View):
 
         robot_data = json.load(request)
 
-        robot = Robot()
-        robot.model = robot_data.get('model')
-        robot.version = robot_data.get('version')
-        robot.created = robot_data.get('created')
-        robot.serial = f'{robot.model}-{robot.version}'
-
         try:
+            robot = Robot()
+
+            robot.model = robot_data.get('model')
+            robot.version = robot_data.get('version')
+            robot.created = robot_data.get('created')
+            robot.serial = f'{robot.model}-{robot.version}'
+
             robot.full_clean()
             robot.save()
 
@@ -60,6 +62,9 @@ class RobotView(View):
             return JsonResponse({'message': message}, status=400)
         except ValidationError as error:
             message = f'Ошибка валидации: {error}'
+            return JsonResponse({'message': message}, status=400)
+        except Exception as error:
+            message = f'Ошибка: {error}'
             return JsonResponse({'message': message}, status=400)
 
         return JsonResponse(robot_data, status=201)
@@ -87,7 +92,8 @@ class TableCreatedRobots(View):
 
     def get(self, *args, **kwargs):
         response = HttpResponse(content_type='application/ms-excel')
-        response['Content-Disposition'] = 'attachment; filename="created_robots.xlsx"'
+        response['Content-Disposition'] = \
+            'attachment; filename="created_robots.xlsx"'
 
         wb = Workbook()
 
@@ -139,3 +145,48 @@ class TableCreatedRobots(View):
 
         wb.save(response)
         return response
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class OrderView(View):
+    """Добавление заказа на робота."""
+
+    def post(self, request):
+
+        order_data = json.load(request)
+
+        try:
+            order = Order()
+
+            customer = Customer.objects.get(id=order_data.get('customer'))
+            order.customer = customer
+            order.robot_serial = order_data.get('robot_serial')
+
+            order.full_clean()
+
+            # Проверка наличия готового робота на складе для текущего заказа
+            serial = order.robot_serial
+            robots = Robot.objects.filter(serial=serial, sold=False)
+
+            # Если робот есть на складе добавляем его в заказ
+            # и отмечаем выбранного робота в категорию "проданные"
+            if robots:
+                robot = robots[0]
+                order.purchase = robot
+                robot.sold = True
+                robot.save()
+
+            order.save()
+
+        except IntegrityError as error:
+            empty_value = str(error).rsplit('.')
+            message = f'Не заполнено поле {empty_value[1]}'
+            return JsonResponse({'message': message}, status=400)
+        except ValidationError as error:
+            message = f'Ошибка валидации: {error}'
+            return JsonResponse({'message': message}, status=400)
+        except Exception as error:
+            message = f'Ошибка: {error}'
+            return JsonResponse({'message': message}, status=400)
+
+        return JsonResponse(order_data, status=201)

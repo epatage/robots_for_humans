@@ -10,10 +10,12 @@ class RobotAdmin(admin.ModelAdmin):
         'model',
         'version',
         'created',
+        'sold',
+        'id'
     )
     search_fields = ('serial', 'model', 'version', 'created')
     list_filter = ('model', 'created')
-    list_editable = ('model', 'version', 'created')
+    list_editable = ('model', 'version', 'created', 'sold', 'id')
 
 
 @admin.register(RobotModel)
