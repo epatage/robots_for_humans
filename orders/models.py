@@ -19,38 +19,33 @@ class Order(models.Model):
 
 
 @receiver(post_save, sender=Robot)
-def robot_created_signal(sender, **kwargs):
+def robot_created_signal(sender, instance, created, **kwargs):
     """
     Сигнал при изготовлении нового робота проверяет наличие заказа на данную
     серию и, в случае наличия ожидающего заказа,
     отправляет электронное письмо покупателю.
     """
 
-    # Прерывает выполнение сигнала, при сохранении изменений
-    # уже проданного робота
-    sold = kwargs.get('instance').sold
-    if sold:
-        return
+    if created:
+        robot = instance.serial
+        model, version = robot.split('-')
 
-    robot = kwargs.get('instance').serial
-    model, version = robot.split('-')
+        orders = Order.objects.filter(purchase=None, robot_serial=robot)
 
-    orders = Order.objects.filter(purchase=None, robot_serial=robot)
+        if orders:
+            order = orders[0]
+            email = order.customer.email
 
-    if orders:
-        order = orders[0]
-        email = order.customer.email
+            text_mail = \
+                'Добрый день!\n'\
+                f'Недавно вы интересовались нашим роботом модели {model}, '\
+                f'версии {version}.\n'\
+                'Этот робот теперь в наличии. Если вам подходит этот вариант - '\
+                'пожалуйста, свяжитесь с нами.'
 
-        text_mail = \
-            'Добрый день!\n'\
-            f'Недавно вы интересовались нашим роботом модели {model}, '\
-            f'версии {version}.\n'\
-            'Этот робот теперь в наличии. Если вам подходит этот вариант - '\
-            'пожалуйста, свяжитесь с нами.'
-
-        send_mail(
-            'Ваш робот готов!',
-            f'{text_mail}',
-            'robots@r4c.com',
-            [f'{email}'],
-        )
+            send_mail(
+                'Ваш робот готов!',
+                f'{text_mail}',
+                'robots@r4c.com',
+                [f'{email}'],
+            )
