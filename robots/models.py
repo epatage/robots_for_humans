@@ -1,5 +1,5 @@
-from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import CheckConstraint, Q
 
 
 class RobotModel(models.Model):
@@ -17,15 +17,15 @@ class Robot(models.Model):
     created = models.DateTimeField(blank=False, null=False)
     sold = models.BooleanField(default=False)
 
+    class Meta:
+        constraints = [
+            CheckConstraint(
+                check=Q(model__in=list(
+                    RobotModel.objects.all().values_list('name', flat=True)
+                )),
+                name='Проверка модели робота',
+            ),
+        ]
+
     def __str__(self):
         return self.serial
-
-    def clean(self):
-        robot_models = list(
-            RobotModel.objects.all().values_list('name', flat=True)
-        )
-
-        if self.model not in robot_models:
-            raise ValidationError(
-                'Указана не существующая модель',
-            )
