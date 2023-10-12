@@ -61,7 +61,7 @@ class RobotView(View):
             message = f'Не заполнено поле {empty_value[1]}'
             return JsonResponse({'message': message}, status=400)
         except ValidationError as error:
-            message = f'Ошибка валидации: {error.messages}'
+            message = f'Ошибка валидации: {error}'
             return JsonResponse({'message': message}, status=400)
         except Exception as error:
             message = f'Ошибка: {error}'
